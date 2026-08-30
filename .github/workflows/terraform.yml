@@ -44,18 +44,22 @@ jobs:
 
       # 4. Terraform Init
       - name: Terraform Init
+        working-directory: ./envs/dev
         run: terraform init
 
       # 5. Terraform Format Check
       - name: Terraform Format Check
+        working-directory: ./envs/dev
         run: terraform fmt -check
 
       # 6. Terraform Validate
       - name: Terraform Validate
+        working-directory: ./envs/dev
         run: terraform validate
 
       # 7. Terraform Plan
       - name: Terraform Plan
+        working-directory: ./envs/dev
         run: terraform plan -out=tfplan
 
       # 8. Upload the generated plan
@@ -103,6 +107,7 @@ jobs:
 
       # 4. Terraform Init
       - name: Terraform Init
+        working-directory: ./envs/dev
         run: terraform init
 
       # 5. Download the exact plan generated above
@@ -113,4 +118,5 @@ jobs:
 
       # 6. Apply the exact plan
       - name: Terraform Apply
+        working-directory: ./envs/dev
         run: terraform apply -auto-approve tfplan
