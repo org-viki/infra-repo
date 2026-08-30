@@ -1,0 +1,71 @@
+# ==========================================
+# Terraform
+# ==========================================
+
+# Terraform working directory
+**/.terraform/
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+**/*.tfstate
+**/*.tfstate.*
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Terraform plan files
+*.tfplan
+*.plan
+
+# Terraform variable files containing secrets
+# *.tfvars
+# *.tfvars.json
+
+# Exception: commit non-sensitive example tfvars
+!**/terraform.tfvars.example
+!**/*.auto.tfvars.example
+
+
+# ==========================================
+# Terraform CLI / override files
+# ==========================================
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+
+# ==========================================
+# Terraform lock file
+# ==========================================
+
+# DO NOT ignore .terraform.lock.hcl
+# It SHOULD be committed to Git.
+
+
+# ==========================================
+# OS files
+# ==========================================
+
+.DS_Store
+Thumbs.db
+
+
+# ==========================================
+# Editor / IDE
+# ==========================================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
+# ==========================================
+# Logs
+# ==========================================
+
+*.log

@@ -1,0 +1,1 @@
+tfstate_storage_account_name = "sttfstatevikram001"
