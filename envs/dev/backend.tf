@@ -1,7 +1,7 @@
 terraform {
   backend "azurerm" {
     # use_cli          = true
-    # use_azuread_auth = true
+    use_azuread_auth = true
 
    
     resource_group_name  = "rg-tfstate"
