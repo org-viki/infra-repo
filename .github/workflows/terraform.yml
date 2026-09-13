@@ -1,4 +1,4 @@
-name: Terraform Dev
+name: Terraform
 
 on:
   pull_request:
@@ -9,29 +9,64 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select environment to deploy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+
 permissions:
   contents: read
   id-token: write
 
-env:
-  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-  ARM_USE_OIDC: true
+
+# ============================================================
+# TERRAFORM PLAN
+# ============================================================
 
 jobs:
 
   terraform-plan:
+
     name: Terraform Plan
+
     runs-on: ubuntu-latest
+
+    # PR -> dev
+    # Push to main -> dev
+    # Manual -> selected environment
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+
+    env:
+      DEPLOY_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: true
+
+      TF_IN_AUTOMATION: true
 
     steps:
 
-      # 1. Checkout repository
-      - name: Checkout
+      # --------------------------------------------------------
+      # 1. Checkout
+      # --------------------------------------------------------
+
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Login to Azure using GitHub OIDC
+
+      # --------------------------------------------------------
+      # 2. Azure OIDC Login
+      # --------------------------------------------------------
+
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -39,62 +74,117 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # 3. Install Terraform
+
+      # --------------------------------------------------------
+      # 3. Terraform
+      # --------------------------------------------------------
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.1
 
+
+      # --------------------------------------------------------
       # 4. Terraform Init
+      # --------------------------------------------------------
+
       - name: Terraform Init
-        working-directory: ./envs/dev
+        working-directory: ./env/${{ env.DEPLOY_ENV }}
         run: terraform init -reconfigure
 
-      # 5. Terraform Format Check
-      - name: Terraform Format Check
-        working-directory: ./envs/dev
-        run: terraform fmt -check
 
+      # --------------------------------------------------------
+      # 5. Terraform Format Check
+      # --------------------------------------------------------
+
+      - name: Terraform Format Check
+        working-directory: ./env/${{ env.DEPLOY_ENV }}
+        run: terraform fmt -check -recursive
+
+
+      # --------------------------------------------------------
       # 6. Terraform Validate
+      # --------------------------------------------------------
+
       - name: Terraform Validate
-        working-directory: ./envs/dev
+        working-directory: ./env/${{ env.DEPLOY_ENV }}
         run: terraform validate
 
+
+      # --------------------------------------------------------
       # 7. Terraform Plan
+      # --------------------------------------------------------
+
       - name: Terraform Plan
-        working-directory: ./envs/dev
+        working-directory: ./env/${{ env.DEPLOY_ENV }}
         run: terraform plan -out=tfplan
 
-      # 8. Upload the generated plan
+
+      # --------------------------------------------------------
+      # 8. Upload Plan
+      # --------------------------------------------------------
+
       - name: Upload Terraform Plan
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-plan
-          path: ./envs/dev/tfplan
+          name: terraform-plan-${{ env.DEPLOY_ENV }}
+          path: ./env/${{ env.DEPLOY_ENV }}/tfplan
+          retention-days: 5
 
+
+
+# ============================================================
+# TERRAFORM APPLY
+# ============================================================
 
   terraform-apply:
-    name: Terraform Apply
-    needs: terraform-plan
 
-    # Apply only after merge/push to main
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Terraform Apply
+
+    needs:
+      - terraform-plan
+
+    # Apply ONLY:
+    # 1. after merge to main
+    # 2. manual workflow execution
+    if: >
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/main')
+      ||
+      github.event_name == 'workflow_dispatch'
 
     runs-on: ubuntu-latest
 
-    # GitHub Environment approval
-    # environment:
-    #   name: dev
+    # Same environment selected above
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
 
-    permissions:
-      contents: read
-      id-token: write
+    env:
+      DEPLOY_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: true
+
+      TF_IN_AUTOMATION: true
+
 
     steps:
 
-      # 1. Checkout repository
-      - name: Checkout
+      # --------------------------------------------------------
+      # 1. Checkout
+      # --------------------------------------------------------
+
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # --------------------------------------------------------
       # 2. Azure OIDC Login
+      # --------------------------------------------------------
+
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -102,23 +192,41 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # 3. Install Terraform
+
+      # --------------------------------------------------------
+      # 3. Terraform
+      # --------------------------------------------------------
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.1
 
+
+      # --------------------------------------------------------
       # 4. Terraform Init
+      # --------------------------------------------------------
+
       - name: Terraform Init
-        working-directory: ./envs/dev
+        working-directory: ./env/${{ env.DEPLOY_ENV }}
         run: terraform init -reconfigure
 
-      # 5. Download the exact plan generated above
+
+      # --------------------------------------------------------
+      # 5. Download Exact Plan
+      # --------------------------------------------------------
+
       - name: Download Terraform Plan
         uses: actions/download-artifact@v4
         with:
-          name: terraform-plan
-          path: ./envs/dev
+          name: terraform-plan-${{ env.DEPLOY_ENV }}
+          path: ./env/${{ env.DEPLOY_ENV }}
 
-      # 6. Apply the exact plan
+
+      # --------------------------------------------------------
+      # 6. Terraform Apply
+      # --------------------------------------------------------
+
       - name: Terraform Apply
-        working-directory: ./envs/dev
+        working-directory: ./env/${{ env.DEPLOY_ENV }}
         run: terraform apply -auto-approve tfplan
